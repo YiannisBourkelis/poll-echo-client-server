@@ -57,5 +57,7 @@ windows:INCLUDEPATH += $$PWD/../OpenSSL-1.1.0g/include/
 linux:LIBS += -L$$PWD/../OpenSSL-1.1.0g -lcrypto
 linux:LIBS += -L$$PWD/../OpenSSL-1.1.0g -lssl
 linux:INCLUDEPATH += $$PWD/../OpenSSL-1.1.0g/include
+
+linux:LIBS += -ldl
 #***************************************************************
 
