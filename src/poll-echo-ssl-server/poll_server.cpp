@@ -25,6 +25,7 @@
 #include <netinet/tcp.h> //gia to TCP_NODELAY
 #include <iostream> //std::cout, memset
 #include <vector>
+#include <string.h> //memset
 
 #define SERVER_PORT  12346
 
