@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <thread>
 #include <memory>
+#include <QThread>
 
 PollClient::PollClient()
 {
@@ -210,6 +211,6 @@ void PollClient::ConnectToServer(std::string host, int port)
 
             std::string sbuff(buff.begin(), buff.end());
             std::cout << sbuff << std::endl;
-            sleep(1);
+            QThread::msleep(1000);
         }
 }

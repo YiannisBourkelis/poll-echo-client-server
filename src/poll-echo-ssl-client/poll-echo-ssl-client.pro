@@ -46,6 +46,7 @@ macx:INCLUDEPATH += $$PWD/../OpenSSL-1.1.0g/include/
 windows:LIBS += -L$$PWD/../OpenSSL-1.1.0g/ -llibcrypto
 windows:LIBS += -L$$PWD/../OpenSSL-1.1.0g/ -llibssl
 windows:INCLUDEPATH += $$PWD/../OpenSSL-1.1.0g/include/
+windows:INCLUDEPATH += $$PWD/../OpenSSL-1.1.0g/ms/
 
 # linux compile guide:
 # go inside OpenSSL-x.x folder using the terminal
