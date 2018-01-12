@@ -59,7 +59,7 @@ void PollServer::create_context()
 {
     const SSL_METHOD *method;
 
-    method = SSLv23_server_method();
+    method = TLSv1_2_server_method();
 
     sslctx_ = SSL_CTX_new(method);
     if (!sslctx_) {
@@ -99,8 +99,6 @@ void PollServer::start()
   int    nfds = 1, current_size = 0, i, j;
 
   InitializeSSL();
-  //sslctx_ = SSL_CTX_new( SSLv23_server_method());
-  //SSL_CTX_set_options(sslctx_, SSL_OP_SINGLE_DH_USE);
   create_context();
   configure_context();
 
@@ -287,6 +285,8 @@ void PollServer::start()
             break;
           }
 
+
+
           sslmap_.insert(std::pair<int,SSL*>(new_sd, SSL_new(sslctx_)));
           SSL_set_fd(sslmap_.at(new_sd), new_sd);
           ERR_print_errors_fp(stderr);
@@ -297,7 +297,8 @@ void PollServer::start()
               //SSL_ERROR_NONE
               int sslgerr = SSL_get_error(sslmap_.at(new_sd), ssl_err);
               while ( sslgerr == SSL_ERROR_WANT_READ){
-                  usleep(100);
+                  //usleep(100);
+                  sleep(1);//1 second
                   ssl_err = SSL_accept(sslmap_.at(new_sd));
                   sslgerr = SSL_get_error(sslmap_.at(new_sd), ssl_err);
                   std::cout << "SSL accept error: " << sslgerr << std::endl;

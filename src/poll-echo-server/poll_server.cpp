@@ -20,7 +20,7 @@
 #include <iostream> //std::cout, memset
 #include <vector>
 
-#define SERVER_PORT  12345
+#define SERVER_PORT  12347
 
 #define TRUE             1
 #define FALSE            0

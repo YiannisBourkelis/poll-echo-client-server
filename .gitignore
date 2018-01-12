@@ -42,3 +42,11 @@ src/poll-echo-ssl-server/poll-echo-ssl-server.pro.user
 src/poll-echo-ssl-server/poll-echo-ssl-server.pro.user
 
 *.user
+
+*.stash
+
+src/poll-echo-ssl-client/build-poll-echo-ssl-client-Desktop_Qt_5_10_0_clang_64bit-Debug/certificate.pem
+
+src/poll-echo-ssl-client/build-poll-echo-ssl-client-Desktop_Qt_5_10_0_clang_64bit-Debug/key.pem
+
+src/poll-echo-ssl-client/build-poll-echo-ssl-client-Desktop_Qt_5_10_0_clang_64bit-Debug/poll-echo-ssl-client
