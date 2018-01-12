@@ -1,6 +1,6 @@
-src/build-poll-echo-ssl-client-Clone_of_Desktop_Qt_5_3_2_MSVC2013_32bit-Debug
+src/build-client-32bit-Release
 
-src/build-poll-echo-ssl-client-Clone_of_Desktop_Qt_5_3_2_MSVC2013_32bit-Release
+src/build-client-32bit-Debug
 
 src/build-poll-echo-server-Desktop_Qt_5_10_0_clang_64bit-Debug/.qmake.stash
 
