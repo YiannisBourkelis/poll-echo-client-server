@@ -12,23 +12,33 @@
 // https://wiki.openssl.org/index.php/Simple_TLS_Server
 
 #include "poll_server.h"
-
-
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
+#include <iostream> //std::cout, memset
+#include <vector>
+#include <string.h> //memset
+#include <QThread> //sleep
+
+#ifndef WIN32
 #include <sys/ioctl.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <netinet/in.h>
-#include <errno.h>
 #include <arpa/inet.h> //inet_ntop
-
 #include <unistd.h> //close
 #include <netinet/tcp.h> //gia to TCP_NODELAY
-#include <iostream> //std::cout, memset
-#include <vector>
-#include <string.h> //memset
+#else
+//#define NOMINMAX
+#include <stdio.h>
+#include "winsock2.h"
+#include <ws2tcpip.h>
+#define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
+#define bcopy(b1,b2,len) (memmove((b2), (b1), (len)), (void) 0)
+#define in_addr_t uint32_t
+#pragma comment(lib, "Ws2_32.lib")
+#endif
 
 PollServer::PollServer()
 {
@@ -89,6 +99,17 @@ void PollServer::start(int server_port)
   struct                pollfd fds[200];
   int                   nfds = 1, current_size = 0, i, j;
 
+#ifdef WIN32
+    // Initialize Winsock
+    int iResult;
+    WSADATA wsaData;
+    iResult = WSAStartup(MAKEWORD(2,2), &wsaData);
+    if (iResult != 0) {
+        std::cout << "WSAStartup failed: " << iResult << std::endl;
+        return;
+    }
+#endif
+
   InitializeSSL();
   create_context();
   configure_context();
@@ -112,7 +133,11 @@ void PollServer::start(int server_port)
   if (rc < 0)
   {
     perror("setsockopt() failed");
+    #ifdef WIN32
+    closesocket(listen_sd);
+    #else
     close(listen_sd);
+    #endif
     exit(-1);
   }
 
@@ -121,11 +146,19 @@ void PollServer::start(int server_port)
   /* the incoming connections will also be nonblocking since  */
   /* they will inherit that state from the listening socket.   */
   /*************************************************************/
+  #ifdef WIN32
+  rc = ioctlsocket(listen_sd, FIONBIO, (u_long*)&on);
+  #else
   rc = ioctl(listen_sd, FIONBIO, (char *)&on);
+  #endif
   if (rc < 0)
   {
-    perror("ioctl() failed");
+    perror("ioctl() failed"); 
+    #ifdef WIN32
+    closesocket(listen_sd);
+    #else
     close(listen_sd);
+    #endif
     exit(-1);
   }
 
@@ -140,7 +173,11 @@ void PollServer::start(int server_port)
   if (rc < 0)
   {
     perror("bind() failed");
+    #ifdef WIN32
+    closesocket(listen_sd);
+    #else
     close(listen_sd);
+    #endif
     exit(-1);
   }
 
@@ -152,7 +189,11 @@ void PollServer::start(int server_port)
   if (rc < 0)
   {
     perror("listen() failed");
+    #ifdef WIN32
+    closesocket(listen_sd);
+    #else
     close(listen_sd);
+    #endif
     exit(-1);
   }
 
@@ -191,7 +232,11 @@ void PollServer::start(int server_port)
     /* Call poll() without a timeout.      */
     /***********************************************************/
     std::cout << "Waiting on poll()...\n" << std::endl;
+    #ifdef WIN32
+    rc = WSAPoll(fds, nfds, -1);
+    #else
     rc = poll(fds, nfds, -1);
+    #endif
 
     /***********************************************************/
     /* Check to see if the poll call failed.                   */
@@ -226,7 +271,11 @@ void PollServer::start(int server_port)
         std::cout << printf("  Error! revents = %d\n", fds[i].revents) << std::endl;
         perror("  Error on readable descriptor");
 
+          #ifdef WIN32
+          closesocket(fds[i].fd);
+          #else
           close(fds[i].fd);
+          #endif
           SSL_shutdown(sslmap_.at(fds[i].fd));
           SSL_free(sslmap_.at(fds[i].fd));
           sslmap_.erase(sslmap_.find(fds[i].fd));
@@ -287,11 +336,19 @@ void PollServer::start(int server_port)
          /* the incoming connections will also be nonblocking since  */
          /* they will inherit that state from the listening socket.   */
          /*************************************************************/
+         #ifdef WIN32
+         rc = ioctlsocket(new_sd, FIONBIO, (u_long*)&on);
+         #else
          rc = ioctl(new_sd, FIONBIO, (char *)&on);
+         #endif
          if (rc < 0)
          {
            perror("ioctl() failed");
+           #ifdef WIN32
+           closesocket(new_sd);
+           #else
            close(new_sd);
+           #endif
            break;
          }
 
@@ -305,7 +362,7 @@ void PollServer::start(int server_port)
               //SSL_ERROR_NONE
               int sslgerr = SSL_get_error(sslmap_.at(new_sd), ssl_err);
               while ( sslgerr == SSL_ERROR_WANT_READ){
-                  usleep(10);
+                  QThread::usleep(10);
                   //sleep(1);//1 second
                   ssl_err = SSL_accept(sslmap_.at(new_sd));
                   sslgerr = SSL_get_error(sslmap_.at(new_sd), ssl_err);
@@ -433,7 +490,11 @@ void PollServer::start(int server_port)
         /*******************************************************/
         if (close_conn)
         {
+          #ifdef WIN32
+          closesocket(fds[i].fd);
+          #else
           close(fds[i].fd);
+          #endif
           SSL_shutdown(sslmap_.at(fds[i].fd));
           SSL_free(sslmap_.at(fds[i].fd));
           sslmap_.erase(sslmap_.find(fds[i].fd));
@@ -476,11 +537,15 @@ void PollServer::start(int server_port)
   for (i = 0; i < nfds; i++)
   {
     if(fds[i].fd >= 0)
-      close(fds[i].fd);
-      if (sslmap_.find(fds[i].fd) != sslmap_.end()) {
-          SSL_shutdown(sslmap_.at(fds[i].fd));
-          SSL_free(sslmap_.at(fds[i].fd));
-          sslmap_.erase(fds[i].fd);
+        #ifdef WIN32
+        closesocket(fds[i].fd);
+        #else
+        close(fds[i].fd);
+        #endif
+     if (sslmap_.find(fds[i].fd) != sslmap_.end()) {
+        SSL_shutdown(sslmap_.at(fds[i].fd));
+        SSL_free(sslmap_.at(fds[i].fd));
+        sslmap_.erase(fds[i].fd);
       }
   }//for
 
