@@ -273,7 +273,7 @@ void PollServer::start(int server_port)
           /*************************************************************/
          int flag = 1;
          int setsockopt_nagle_ret = 0;
-         setsockopt_nagle_ret = setsockopt(listen_sd,                    /* socket affected */
+         setsockopt_nagle_ret = setsockopt(new_sd,/* socket affected */
                                  IPPROTO_TCP,     /* set option at TCP level */
                                  TCP_NODELAY,     /* name of option */
                                  (char *) &flag,  /* the cast is historical cruft */
@@ -282,7 +282,18 @@ void PollServer::start(int server_port)
              perror("setsockopt to disable nagle algorithm failed for listening socket");
          }
 
-
+         /*************************************************************/
+         /* Set socket to be nonblocking. All of the sockets for    */
+         /* the incoming connections will also be nonblocking since  */
+         /* they will inherit that state from the listening socket.   */
+         /*************************************************************/
+         rc = ioctl(new_sd, FIONBIO, (char *)&on);
+         if (rc < 0)
+         {
+           perror("ioctl() failed");
+           close(new_sd);
+           break;
+         }
 
           sslmap_.insert(std::pair<int,SSL*>(new_sd, SSL_new(sslctx_)));
           SSL_set_fd(sslmap_.at(new_sd), new_sd);
