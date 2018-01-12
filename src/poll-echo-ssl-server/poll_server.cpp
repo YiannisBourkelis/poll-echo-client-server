@@ -5,6 +5,9 @@
 // Using poll() instead of select()
 // poll server based on code from https://www.ibm.com/support/knowledgecenter/en/ssw_i5_54/rzab6/poll.htm
 
+// SSL Programming Tutorial
+// http://h41379.www4.hpe.com/doc/83final/ba554_90007/ch04s03.html
+
 // Simple TLS Server
 // https://wiki.openssl.org/index.php/Simple_TLS_Server
 
@@ -27,11 +30,6 @@
 #include <vector>
 #include <string.h> //memset
 
-#define SERVER_PORT  12346
-
-#define TRUE             1
-#define FALSE            0
-
 PollServer::PollServer()
 {
 }
@@ -47,12 +45,6 @@ void PollServer::DestroySSL()
 {
     ERR_free_strings();
     EVP_cleanup();
-}
-
-void PollServer::ShutdownSSL()
-{
-    //SSL_shutdown(cSSL_);
-    //SSL_free(cSSL_);
 }
 
 void PollServer::create_context()
@@ -71,40 +63,35 @@ void PollServer::create_context()
 
 void PollServer::configure_context()
 {
-    //SSL_CTX_set_ecdh_auto(ctx, 1);
     SSL_CTX_set_ecdh_auto(sslctx_, 1);
 
     /* Set the key and cert */
     if (SSL_CTX_use_certificate_file(sslctx_, "../certificate.pem", SSL_FILETYPE_PEM) <= 0) {
         ERR_print_errors_fp(stderr);
-    exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
     }
 
     if (SSL_CTX_use_PrivateKey_file(sslctx_, "../key.pem", SSL_FILETYPE_PEM) <= 0 ) {
         ERR_print_errors_fp(stderr);
-    exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
     }
 }
 
-void PollServer::start()
+void PollServer::start(int server_port)
 {
-  int    len, rc, on = 1;
-  int    listen_sd = -1, new_sd = -1;
-  int    end_server = FALSE, compress_array = FALSE;
-  int    close_conn;
-  char   buffer[80];
+  int                   len, rc, on = 1;
+  int                   listen_sd = -1, new_sd = -1;
+  bool                  end_server = false, compress_array = false;
+  int                   close_conn;
+  char                  buffer[80];
   struct sockaddr_in6   addr, clientaddr;
-  socklen_t    addrlen = sizeof(clientaddr);
-  struct pollfd fds[200];
-  int    nfds = 1, current_size = 0, i, j;
+  socklen_t             addrlen = sizeof(clientaddr);
+  struct                pollfd fds[200];
+  int                   nfds = 1, current_size = 0, i, j;
 
   InitializeSSL();
   create_context();
   configure_context();
-
-  //int use_cert = SSL_CTX_use_certificate_file(sslctx_, "certificate.pem" , SSL_FILETYPE_PEM);
-  //int use_prv = SSL_CTX_use_PrivateKey_file(sslctx_, "key.pem", SSL_FILETYPE_PEM);
-  //cSSL_ = SSL_new(sslctx_);
 
   /*************************************************************/
   /* Create an AF_INET stream socket to receive incoming       */
@@ -148,9 +135,8 @@ void PollServer::start()
   memset(&addr, 0, sizeof(addr));
   addr.sin6_family      = AF_INET6;
   addr.sin6_addr        = in6addr_any;
-  addr.sin6_port        = htons(SERVER_PORT);
-  rc = bind(listen_sd,
-            (struct sockaddr *)&addr, sizeof(addr));
+  addr.sin6_port        = htons(server_port);
+  rc = bind(listen_sd, (struct sockaddr *)&addr, sizeof(addr));
   if (rc < 0)
   {
     perror("bind() failed");
@@ -161,7 +147,7 @@ void PollServer::start()
   /*************************************************************/
   /* Set the listen back log                                   */
   /*************************************************************/
-  std::cout << "Listening for connections on port:" << SERVER_PORT << std::endl;
+  std::cout << "Listening for connections on port:" << server_port << std::endl;
   rc = listen(listen_sd, 35);
   if (rc < 0)
   {
@@ -178,7 +164,7 @@ void PollServer::start()
   /*************************************************************/
   /* Set up the initial listening socket                        */
   /*************************************************************/
-  fds[0].fd = listen_sd;
+  fds[0].fd     = listen_sd;
   fds[0].events = POLLIN;
 
    /*************************************************************/
@@ -241,10 +227,11 @@ void PollServer::start()
         perror("  Error on readable descriptor");
 
           close(fds[i].fd);
+          SSL_shutdown(sslmap_.at(fds[i].fd));
           SSL_free(sslmap_.at(fds[i].fd));
           sslmap_.erase(sslmap_.find(fds[i].fd));
           fds[i].fd = -1;
-          compress_array = TRUE;
+          compress_array = true;
 
         break;
       }
@@ -276,10 +263,24 @@ void PollServer::start()
             if (errno != EWOULDBLOCK)
             {
               perror("  accept() failed");
-              end_server = TRUE;
+              end_server = true;
             }
             break;
           }
+
+          /*************************************************************/
+          /* SIMANTIKO: kanw disable to nagle algorithm. meiwnei to latency. */
+          /*************************************************************/
+         int flag = 1;
+         int setsockopt_nagle_ret = 0;
+         setsockopt_nagle_ret = setsockopt(listen_sd,                    /* socket affected */
+                                 IPPROTO_TCP,     /* set option at TCP level */
+                                 TCP_NODELAY,     /* name of option */
+                                 (char *) &flag,  /* the cast is historical cruft */
+                                 sizeof(int));    /* length of option value */
+         if (setsockopt_nagle_ret < 0){
+             perror("setsockopt to disable nagle algorithm failed for listening socket");
+         }
 
 
 
@@ -293,19 +294,18 @@ void PollServer::start()
               //SSL_ERROR_NONE
               int sslgerr = SSL_get_error(sslmap_.at(new_sd), ssl_err);
               while ( sslgerr == SSL_ERROR_WANT_READ){
-                  //usleep(100);
-                  sleep(1);//1 second
+                  usleep(10);
+                  //sleep(1);//1 second
                   ssl_err = SSL_accept(sslmap_.at(new_sd));
                   sslgerr = SSL_get_error(sslmap_.at(new_sd), ssl_err);
-                  std::cout << "SSL accept error: " << sslgerr << std::endl;
+                  //std::cout << "SSL accept error: " << sslgerr << std::endl;
               }
           }
 
           /*************************************************************/
           /* SIMANTIKO: kanw disable to nagle algorithm. meiwnei to latency. */
           /*************************************************************/
-         int flag = 1;
-         int setsockopt_nagle_ret = 0;
+         setsockopt_nagle_ret = 0;
          setsockopt_nagle_ret = setsockopt(listen_sd,                    /* socket affected */
                                  IPPROTO_TCP,     /* set option at TCP level */
                                  TCP_NODELAY,     /* name of option */
@@ -351,7 +351,7 @@ void PollServer::start()
       else
       {
         std::cout << printf("  Descriptor %d is readable\n", fds[i].fd) << std::endl;
-        close_conn = FALSE;
+        close_conn = false;
         /*******************************************************/
         /* Receive all incoming data on this socket            */
         /* before we loop back and call poll again.            */
@@ -373,7 +373,7 @@ void PollServer::start()
             if (errno != EWOULDBLOCK)
             {
               perror("  recv() failed");
-              close_conn = TRUE;
+              close_conn = true;
             }
             break;
           }
@@ -385,7 +385,7 @@ void PollServer::start()
           if (rc == 0)
           {
             std::cout << ("  Connection closed\n") << std::endl;
-            close_conn = TRUE;
+            close_conn = true;
             break;
           }
 
@@ -406,13 +406,13 @@ void PollServer::start()
           if (rc < 0)
           {
             perror("  send() failed");
-            close_conn = TRUE;
+            close_conn = true;
             break;
           }
 
            //to recieve egine opote vgainw apo to loop
-          break;
-        } while(TRUE);
+          //break;
+        } while(true);
 
         /*******************************************************/
         /* If the close_conn flag was turned on, we need       */
@@ -423,10 +423,11 @@ void PollServer::start()
         if (close_conn)
         {
           close(fds[i].fd);
+          SSL_shutdown(sslmap_.at(fds[i].fd));
           SSL_free(sslmap_.at(fds[i].fd));
           sslmap_.erase(sslmap_.find(fds[i].fd));
           fds[i].fd = -1;
-          compress_array = TRUE;
+          compress_array = true;
         }
 
 
@@ -442,7 +443,7 @@ void PollServer::start()
     /***********************************************************/
     if (compress_array)
     {
-      compress_array = FALSE;
+      compress_array = false;
       for (i = 0; i < nfds; i++)
       {
         if (fds[i].fd == -1)
@@ -456,7 +457,7 @@ void PollServer::start()
       }
     }
 
-  } while (end_server == FALSE); /* End of serving running.    */
+  } while (end_server == false); /* End of serving running.    */
 
   /*************************************************************/
   /* Clean up all of the sockets that are open                  */
@@ -465,5 +466,12 @@ void PollServer::start()
   {
     if(fds[i].fd >= 0)
       close(fds[i].fd);
-  }
+      if (sslmap_.find(fds[i].fd) != sslmap_.end()) {
+          SSL_shutdown(sslmap_.at(fds[i].fd));
+          SSL_free(sslmap_.at(fds[i].fd));
+          sslmap_.erase(fds[i].fd);
+      }
+  }//for
+
+  DestroySSL();
 }

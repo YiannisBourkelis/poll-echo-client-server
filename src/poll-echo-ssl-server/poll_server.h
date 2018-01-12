@@ -20,12 +20,11 @@ public:
     //methods
 
     //starts the poll server
-    void start();
+    void start(int server_port);
 
     //ssl specific init and cleanup
     void InitializeSSL();
     void DestroySSL();
-    void ShutdownSSL();
     void create_context();
     void configure_context();
 

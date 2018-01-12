@@ -10,7 +10,7 @@ int main(int argc, char *argv[])
     QCoreApplication a(argc, argv);
 
     PollServer pollserver;
-    pollserver.start();
+    pollserver.start(12346);
 
     return a.exec();
 }
