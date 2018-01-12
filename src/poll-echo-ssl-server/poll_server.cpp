@@ -204,7 +204,7 @@ void PollServer::start()
     /***********************************************************/
     /* Call poll() without a timeout.      */
     /***********************************************************/
-    printf("Waiting on poll()...\n");
+    std::cout << "Waiting on poll()...\n" << std::endl;
     rc = poll(fds, nfds, -1);
 
     /***********************************************************/
@@ -237,19 +237,24 @@ void PollServer::start()
       /*********************************************************/
       if(fds[i].revents != POLLIN)
       {
-        printf("  Error! revents = %d\n", fds[i].revents);
+        std::cout << printf("  Error! revents = %d\n", fds[i].revents) << std::endl;
         perror("  Error on readable descriptor");
-        close_conn = TRUE;
 
-        if (close_conn)
-        {
           close(fds[i].fd);
+          SSL_free(sslmap_.at(fds[i].fd));
+          sslmap_.erase(sslmap_.find(fds[i].fd));
           fds[i].fd = -1;
           compress_array = TRUE;
-        }
 
         break;
       }
+
+      if(fds[i].revents = fds[i].revents & POLLERR)
+      {
+          std::cout << "POLLERR" << std::endl;
+      }
+
+
 
 
 
@@ -258,7 +263,7 @@ void PollServer::start()
         /*******************************************************/
         /* Listening descriptor is readable.                   */
         /*******************************************************/
-        printf("  Listening socket is readable\n");
+        std::cout << ("  Listening socket is readable\n") << std::endl;
 
         /*******************************************************/
         /* Accept all incoming connections that are            */
@@ -323,7 +328,7 @@ void PollServer::start()
           /* Add the new incoming connection to the            */
           /* pollfd structure                                  */
           /*****************************************************/
-          printf("  New incoming connection - %d\n", new_sd);
+          std::cout << printf("  New incoming connection - %d\n", new_sd) << std::endl;
           fds[nfds].fd = new_sd;
           fds[nfds].events = POLLIN;
           nfds++;
@@ -336,8 +341,8 @@ void PollServer::start()
           char str[INET6_ADDRSTRLEN];
           getpeername(new_sd, (struct sockaddr *)&clientaddr, &addrlen);
           if(inet_ntop(AF_INET6, &clientaddr.sin6_addr, str, sizeof(str))) {
-             printf("Client address is %s\n", str);
-             printf("Client port is %d\n", ntohs(clientaddr.sin6_port));
+             std::cout << printf("Client address is %s\n", str) << std::endl;
+             std::cout << printf("Client port is %d\n", ntohs(clientaddr.sin6_port)) << std::endl;
           }
 
           /*****************************************************/
@@ -354,7 +359,7 @@ void PollServer::start()
 
       else
       {
-        printf("  Descriptor %d is readable\n", fds[i].fd);
+        std::cout << printf("  Descriptor %d is readable\n", fds[i].fd) << std::endl;
         close_conn = FALSE;
         /*******************************************************/
         /* Receive all incoming data on this socket            */
@@ -387,7 +392,7 @@ void PollServer::start()
           /*****************************************************/
           if (rc == 0)
           {
-            printf("  Connection closed\n");
+            std::cout << ("  Connection closed\n") << std::endl;
             close_conn = TRUE;
             break;
           }
@@ -396,7 +401,7 @@ void PollServer::start()
           /* Data was received                                 */
           /*****************************************************/
           len = rc;
-          printf("  %d bytes received\n", len);
+          std::cout << printf("  %d bytes received\n", len) << std::endl;
 
           /*****************************************************/
           /* Echo the data back to the client                  */
@@ -410,8 +415,6 @@ void PollServer::start()
           {
             perror("  send() failed");
             close_conn = TRUE;
-            SSL_free(sslmap_.at(fds[i].fd));
-            sslmap_.erase(sslmap_.find(fds[i].fd));
             break;
           }
 
@@ -427,13 +430,15 @@ void PollServer::start()
         if (close_conn)
         {
           close(fds[i].fd);
+          SSL_free(sslmap_.at(fds[i].fd));
+          sslmap_.erase(sslmap_.find(fds[i].fd));
           fds[i].fd = -1;
           compress_array = TRUE;
         }
 
 
       }  /* End of existing connection is readable             */
-    } /* End of loop through pollable descriptors              */
+    } /* End of for loop through pollable descriptors              */
 
     /***********************************************************/
     /* If the compress_array flag was turned on, we need       */

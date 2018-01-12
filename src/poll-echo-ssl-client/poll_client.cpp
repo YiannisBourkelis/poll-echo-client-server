@@ -34,6 +34,7 @@ void PollClient::InitializeSSL()
     SSL_load_error_strings();
     SSL_library_init(); //xreiazetai gia to linux logo bug se palaioteres ekdoseis openssl
     OpenSSL_add_all_algorithms();
+    SSL_load_error_strings();
 }
 
 void PollClient::DestroySSL()
@@ -64,7 +65,7 @@ void PollClient::create_context()
 
 void PollClient::configure_context()
 {
-    SSL_CTX_set_ecdh_auto(sslctx_, 1);
+    //SSL_CTX_set_ecdh_auto(sslctx_, 1);
 
     /*
     // Set the key and cert
@@ -101,8 +102,8 @@ void PollClient::ConnectToServer(std::string host, int port)
     #endif
 
         InitializeSSL();
-        create_context();
-        configure_context();
+        //create_context();
+        //configure_context();
 
     listen_socket = socket(AF_INET, SOCK_STREAM, 0);
 #ifdef WIN32
@@ -136,6 +137,7 @@ void PollClient::ConnectToServer(std::string host, int port)
     bcopy((char *)SERVER->h_addr,
          (char *)&serv_addr.sin_addr,
          SERVER->h_length);
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
 
     //serv_addr.sin_addr.s_addr=inet_addr("192.168.32.20"); // <------------- local server
 
@@ -150,13 +152,19 @@ void PollClient::ConnectToServer(std::string host, int port)
 
         serv_addr.sin_port = htons(port);
 
-        cssl = SSL_new(sslctx_);
-
-        SSL_set_fd(cssl, listen_socket);
+        SSL_library_init();
+        create_context();
 
         //connect to server
     int conres = ::connect(listen_socket, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
-        int conres2 = SSL_connect(cssl);
+
+    cssl = SSL_new(sslctx_);
+    SSL_set_fd(cssl, listen_socket);
+
+    int conres2 = SSL_connect(cssl);
+
+    ERR_print_errors_fp(stderr);
+
     if (conres2 < 0)
     {
         int mysse = SSL_get_error(cssl, conres2);
@@ -181,10 +189,10 @@ void PollClient::ConnectToServer(std::string host, int port)
 
     //int bytes_recv = 0;
     while(true){
-        std::string input_str;
-        std::cin >> input_str;
+        //std::string input_str;
+        //std::cin >> input_str;
         std::vector<char> buff(1024);
-        //std::string input_str = "weddwedwed";
+        std::string input_str = "weddwedwed";
 
         //send(listen_socket, input_str.data(), input_str.size(), 0);
         SSL_write(cssl, input_str.data(), input_str.size());
@@ -218,5 +226,6 @@ void PollClient::ConnectToServer(std::string host, int port)
 
             std::string sbuff(buff.begin(), buff.end());
             std::cout << sbuff << std::endl;
+            sleep(1);
         }
 }
