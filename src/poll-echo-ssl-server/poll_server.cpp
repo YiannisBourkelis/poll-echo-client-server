@@ -367,7 +367,7 @@ void PollServer::start()
           /*****************************************************/
           SSL_set_fd(sslmap_.at(fds[i].fd), fds[i].fd);
           rc = SSL_read(sslmap_.at(fds[i].fd), buffer, sizeof(buffer));
-          std::cout << "errno after SSL_read: " <<errno << std::endl;
+          std::cout << "errno after SSL_read: " << errno << std::endl;
           if (rc < 0)
           {
             if (errno != EWOULDBLOCK)
@@ -410,7 +410,8 @@ void PollServer::start()
             break;
           }
 
-
+           //to recieve egine opote vgainw apo to loop
+          break;
         } while(TRUE);
 
         /*******************************************************/
