@@ -39,6 +39,7 @@ PollServer::PollServer()
 void PollServer::InitializeSSL()
 {
     SSL_load_error_strings();
+    SSL_library_init(); //xreiazetai gia to linux logo bug se palaioteres ekdoseis openssl
     OpenSSL_add_all_algorithms();
 }
 
@@ -70,7 +71,8 @@ void PollServer::create_context()
 
 void PollServer::configure_context()
 {
-    SSL_CTX_set_ecdh_auto(ctx, 1);
+    //SSL_CTX_set_ecdh_auto(ctx, 1);
+    SSL_CTX_set_ecdh_auto(sslctx_, 1);
 
     /* Set the key and cert */
     if (SSL_CTX_use_certificate_file(sslctx_, "../certificate.pem", SSL_FILETYPE_PEM) <= 0) {

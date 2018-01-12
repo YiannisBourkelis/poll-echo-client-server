@@ -32,3 +32,13 @@ src/poll-echo-ssl-server/build-poll-echo-ssl-server-Desktop_Qt_5_10_0_clang_64bi
 src/poll-echo-ssl-server/build-poll-echo-ssl-server-Desktop_Qt_5_10_0_clang_64bit-Debug/poll_server.o
 
 src/poll-echo-ssl-server/build-poll-echo-ssl-server-Desktop_Qt_5_10_0_clang_64bit-Debug/poll-echo-ssl-server
+
+src/poll-echo-ssl-server/poll-echo-ssl-server.pro.user
+
+src/poll-echo-ssl-server/poll_server.cpp.autosave
+
+src/poll-echo-ssl-server/poll-echo-ssl-server.pro.user
+
+src/poll-echo-ssl-server/poll-echo-ssl-server.pro.user
+
+*.user
