@@ -115,10 +115,10 @@ void PollClient::ConnectToServer(std::string host, int port)
         return;
     }
 
-    SERVER = gethostbyname("mailgate.filoxeni.com");
+    //SERVER = gethostbyname("mailgate.filoxeni.com");
     //SERVER = gethostbyname("andamaproxy-us-west.filoxeni.com");
     //SERVER = gethostbyname("andamaproxy-ro-timisoara.filoxeni.com");
-    //SERVER = gethostbyname(host.data());
+    SERVER = gethostbyname(host.data());
 
     if (SERVER == NULL) {
         fprintf(stderr,"ERROR, no such host\n");
@@ -137,7 +137,7 @@ void PollClient::ConnectToServer(std::string host, int port)
     bcopy((char *)SERVER->h_addr,
          (char *)&serv_addr.sin_addr,
          SERVER->h_length);
-    serv_addr.sin_addr.s_addr = INADDR_ANY;
+    //serv_addr.sin_addr.s_addr = INADDR_ANY;
 
     //serv_addr.sin_addr.s_addr=inet_addr("192.168.32.20"); // <------------- local server
 

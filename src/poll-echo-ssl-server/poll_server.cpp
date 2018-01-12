@@ -249,15 +249,6 @@ void PollServer::start()
         break;
       }
 
-      if(fds[i].revents = fds[i].revents & POLLERR)
-      {
-          std::cout << "POLLERR" << std::endl;
-      }
-
-
-
-
-
       if (fds[i].fd == listen_sd)
       {
         /*******************************************************/
@@ -376,6 +367,7 @@ void PollServer::start()
           /*****************************************************/
           SSL_set_fd(sslmap_.at(fds[i].fd), fds[i].fd);
           rc = SSL_read(sslmap_.at(fds[i].fd), buffer, sizeof(buffer));
+          std::cout << "errno after SSL_read: " <<errno << std::endl;
           if (rc < 0)
           {
             if (errno != EWOULDBLOCK)
