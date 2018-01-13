@@ -62,7 +62,6 @@ void PollClient::create_context()
     sslctx_ = SSL_CTX_new(method);
     if (!sslctx_) {
     perror("Unable to create SSL context");
-    ERR_print_errors_fp(stderr);
     exit(EXIT_FAILURE);
     }
 }
@@ -141,10 +140,11 @@ void PollClient::ConnectToServer(std::string host, int port)
     if (conres < 0)
     {
         std::cout << "ERROR connecting. result: " << conres << "\n";
-        perror("ERROR connecting");
         #ifdef WIN32
+        std::cout << "ERROR connecting. result: " << WSAGetLastError() << "\n";
         closesocket(socketfd);
         #else
+        perror("ERROR connecting");
         close(socketfd);
         #endif
         DestroySSL();
@@ -154,7 +154,6 @@ void PollClient::ConnectToServer(std::string host, int port)
     cssl = SSL_new(sslctx_);
     SSL_set_fd(cssl, socketfd);
     int conres2 = SSL_connect(cssl);
-    ERR_print_errors_fp(stderr);
     if (conres2 < 0)
     {
         int mysse = SSL_get_error(cssl, conres2);

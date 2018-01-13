@@ -29,6 +29,7 @@
 #include <arpa/inet.h> //inet_ntop
 #include <unistd.h> //close
 #include <netinet/tcp.h> //gia to TCP_NODELAY
+#include <WS2tcpip.h>
 #else
 //#define NOMINMAX
 #include <stdio.h>
@@ -66,7 +67,6 @@ void PollServer::create_context()
     sslctx_ = SSL_CTX_new(method);
     if (!sslctx_) {
     perror("Unable to create SSL context");
-    ERR_print_errors_fp(stderr);
     exit(EXIT_FAILURE);
     }
 }
@@ -77,12 +77,10 @@ void PollServer::configure_context()
 
     /* Set the key and cert */
     if (SSL_CTX_use_certificate_file(sslctx_, "../certificate.pem", SSL_FILETYPE_PEM) <= 0) {
-        ERR_print_errors_fp(stderr);
         exit(EXIT_FAILURE);
     }
 
     if (SSL_CTX_use_PrivateKey_file(sslctx_, "../key.pem", SSL_FILETYPE_PEM) <= 0 ) {
-        ERR_print_errors_fp(stderr);
         exit(EXIT_FAILURE);
     }
 }
@@ -90,16 +88,16 @@ void PollServer::configure_context()
 void PollServer::start(int server_port)
 {
   int                   len, rc, on = 1;
-  int                   listen_sd = -1, new_sd = -1;
   bool                  end_server = false, compress_array = false;
   int                   close_conn;
   char                  buffer[80];
   struct sockaddr_in6   addr, clientaddr;
   socklen_t             addrlen = sizeof(clientaddr);
-  struct                pollfd fds[200];
   int                   nfds = 1, current_size = 0, i, j;
 
 #ifdef WIN32
+    WSAPOLLFD           fds[200];
+    SOCKET              listen_sd = -1, new_sd = -1;
     // Initialize Winsock
     int iResult;
     WSADATA wsaData;
@@ -108,6 +106,9 @@ void PollServer::start(int server_port)
         std::cout << "WSAStartup failed: " << iResult << std::endl;
         return;
     }
+#else
+    struct              pollfd fds[200];
+    int                 listen_sd = -1, new_sd = -1;
 #endif
 
   InitializeSSL();
@@ -354,7 +355,6 @@ void PollServer::start(int server_port)
 
           sslmap_.insert(std::pair<int,SSL*>(new_sd, SSL_new(sslctx_)));
           SSL_set_fd(sslmap_.at(new_sd), new_sd);
-          ERR_print_errors_fp(stderr);
           //Here is the SSL Accept portion.  Now all reads and writes must use SSL
           int ssl_err = SSL_accept(sslmap_.at(new_sd));
           if(ssl_err <= 0)
