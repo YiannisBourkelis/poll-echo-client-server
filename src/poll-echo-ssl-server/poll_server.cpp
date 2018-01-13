@@ -29,7 +29,6 @@
 #include <arpa/inet.h> //inet_ntop
 #include <unistd.h> //close
 #include <netinet/tcp.h> //gia to TCP_NODELAY
-#include <WS2tcpip.h>
 #else
 //#define NOMINMAX
 #include <stdio.h>
@@ -529,8 +528,7 @@ void PollServer::start(int server_port, protocol ip_protocol)
             if (errno != EWOULDBLOCK)
 #endif
                 {
-            perror("  send() failed");
-            std::cout << "write >>>>>>>>>>>>>>>>>>>" << WSAGetLastError() << std::endl;
+            displayLastError("send() failed");
             close_conn = true;
           }
             break;
