@@ -85,14 +85,26 @@ void PollServer::configure_context()
     }
 }
 
-void PollServer::start(int server_port)
+void PollServer::displayLastError(std::string description){
+    int lastErrorNo = 0;
+#ifdef WIN32
+            lastErrorNo = WSAGetLastError();
+#else
+            lastErrorNo = errno;
+#endif
+    std::cout << description << " - Last error number: " << lastErrorNo << std::endl;
+}
+
+void PollServer::start(int server_port, protocol ip_protocol)
 {
   int                   len, rc, on = 1;
   bool                  end_server = false, compress_array = false;
   int                   close_conn;
   char                  buffer[80];
-  struct sockaddr_in6   addr, clientaddr;
-  socklen_t             addrlen = sizeof(clientaddr);
+  struct sockaddr_in    addr4, clientaddr4;
+  struct sockaddr_in6   addr6, clientaddr6;
+  socklen_t             addrlen4 = sizeof(clientaddr4);
+  socklen_t             addrlen6 = sizeof(clientaddr6);
   int                   nfds = 1, current_size = 0, i, j;
 
 #ifdef WIN32
@@ -119,7 +131,11 @@ void PollServer::start(int server_port)
   /* Create an AF_INET stream socket to receive incoming       */
   /* connections on                                            */
   /*************************************************************/
-  listen_sd = socket(AF_INET6, SOCK_STREAM, 0);
+  if (ip_protocol == PollServer::IPv4) {
+    listen_sd = socket(AF_INET, SOCK_STREAM, 0);
+  } else {
+    listen_sd = socket(AF_INET6, SOCK_STREAM, 0);
+  }
   if (listen_sd < 0)
   {
     perror("socket() failed");
@@ -154,7 +170,7 @@ void PollServer::start(int server_port)
   #endif
   if (rc < 0)
   {
-    perror("ioctl() failed"); 
+    displayLastError("ioctl() failed for listen_sd");
     #ifdef WIN32
     closesocket(listen_sd);
     #else
@@ -166,11 +182,20 @@ void PollServer::start(int server_port)
   /*************************************************************/
   /* Bind the socket                                           */
   /*************************************************************/
-  memset(&addr, 0, sizeof(addr));
-  addr.sin6_family      = AF_INET6;
-  addr.sin6_addr        = in6addr_any;
-  addr.sin6_port        = htons(server_port);
-  rc = bind(listen_sd, (struct sockaddr *)&addr, sizeof(addr));
+  if (ip_protocol == PollServer::IPv4) {
+      memset(&addr4, 0, sizeof(addr4));
+      addr4.sin_family      = AF_INET;
+      addr4.sin_addr.s_addr = INADDR_ANY;
+      addr4.sin_port        = htons(server_port);
+      rc = bind(listen_sd, (struct sockaddr *)&addr4, sizeof(addr4));
+  } else {
+      memset(&addr6, 0, sizeof(addr6));
+      addr6.sin6_family      = AF_INET6;
+      addr6.sin6_addr        = in6addr_any;
+      addr6.sin6_port        = htons(server_port);
+      rc = bind(listen_sd, (struct sockaddr *)&addr6, sizeof(addr6));
+  }
+
   if (rc < 0)
   {
     perror("bind() failed");
@@ -207,7 +232,11 @@ void PollServer::start(int server_port)
   /* Set up the initial listening socket                        */
   /*************************************************************/
   fds[0].fd     = listen_sd;
+  #ifdef WIN32
+  fds[0].events = POLLRDNORM;
+  #else
   fds[0].events = POLLIN;
+  #endif
 
    /*************************************************************/
    /* SIMANTIKO: kanw disable to nagle algorithm. meiwnei to latency. */
@@ -220,7 +249,7 @@ void PollServer::start(int server_port)
                           (char *) &flag,  /* the cast is historical cruft */
                           sizeof(int));    /* length of option value */
   if (setsockopt_nagle_ret < 0){
-      perror("setsockopt to disable nagle algorithm failed for listening socket");
+      displayLastError("setsockopt to disable nagle algorithm failed for listening socket");
   }
 
   /*************************************************************/
@@ -267,7 +296,11 @@ void PollServer::start(int server_port)
       /* If revents is not POLLIN, it's an unexpected result,  */
       /* and closes the socket                                 */
       /*********************************************************/
+#ifdef WIN32
+      if(fds[i].revents != POLLRDNORM)
+#else
       if(fds[i].revents != POLLIN)
+#endif
       {
         std::cout << printf("  Error! revents = %d\n", fds[i].revents) << std::endl;
         perror("  Error on readable descriptor");
@@ -308,9 +341,17 @@ void PollServer::start(int server_port)
           /* server.                                           */
           /*****************************************************/
           new_sd = accept(listen_sd, NULL, NULL);
+          //Sta windows, gia kapoio logo to new_sd epistrefei MAX_UINT
+          //otan den yparxei allo socket gia accept kai oxi -1 opws ginetai se linux/osx
+#ifdef WIN32
+          if (new_sd == UINT_MAX || new_sd < 0)
+          {
+            if (WSAGetLastError() != WSAEWOULDBLOCK)
+#else
           if (new_sd < 0)
           {
             if (errno != EWOULDBLOCK)
+#endif
             {
               perror("  accept() failed");
               end_server = true;
@@ -329,7 +370,7 @@ void PollServer::start(int server_port)
                                  (char *) &flag,  /* the cast is historical cruft */
                                  sizeof(int));    /* length of option value */
          if (setsockopt_nagle_ret < 0){
-             perror("setsockopt to disable nagle algorithm failed for listening socket");
+             displayLastError("setsockopt to disable nagle algorithm failed for new_sd socket");
          }
 
          /*************************************************************/
@@ -344,7 +385,7 @@ void PollServer::start(int server_port)
          #endif
          if (rc < 0)
          {
-           perror("ioctl() failed");
+           displayLastError("ioctl() failed for new_sd");
            #ifdef WIN32
            closesocket(new_sd);
            #else
@@ -370,26 +411,17 @@ void PollServer::start(int server_port)
               }
           }
 
-          /*************************************************************/
-          /* SIMANTIKO: kanw disable to nagle algorithm. meiwnei to latency. */
-          /*************************************************************/
-         setsockopt_nagle_ret = 0;
-         setsockopt_nagle_ret = setsockopt(listen_sd,                    /* socket affected */
-                                 IPPROTO_TCP,     /* set option at TCP level */
-                                 TCP_NODELAY,     /* name of option */
-                                 (char *) &flag,  /* the cast is historical cruft */
-                                 sizeof(int));    /* length of option value */
-         if (setsockopt_nagle_ret < 0){
-             perror("setsockopt to disable nagle algorithm failed for new socket");
-         }
-
           /*****************************************************/
           /* Add the new incoming connection to the            */
           /* pollfd structure                                  */
           /*****************************************************/
           std::cout << printf("  New incoming connection - %d\n", new_sd) << std::endl;
           fds[nfds].fd = new_sd;
+          #ifdef WIN32
+          fds[nfds].events = POLLRDNORM;
+          #else
           fds[nfds].events = POLLIN;
+          #endif
           nfds++;
 
           /*****************************************************************/
@@ -397,18 +429,31 @@ void PollServer::start(int server_port)
           /* an IPv4 client, the address will be shown as an IPv4 Mapped   */
           /* IPv6 address.                                                 */
           /*****************************************************************/
-          char str[INET6_ADDRSTRLEN];
-          getpeername(new_sd, (struct sockaddr *)&clientaddr, &addrlen);
-          if(inet_ntop(AF_INET6, &clientaddr.sin6_addr, str, sizeof(str))) {
-             std::cout << printf("Client address is %s\n", str) << std::endl;
-             std::cout << printf("Client port is %d\n", ntohs(clientaddr.sin6_port)) << std::endl;
+          if (ip_protocol == PollServer::IPv4) {
+              char str[INET_ADDRSTRLEN];
+              getpeername(new_sd, (struct sockaddr *)&clientaddr4, &addrlen4);
+              if(inet_ntop(AF_INET, &clientaddr4.sin_addr, str, sizeof(str))) {
+                 std::cout << printf("Client address is %s\n", str) << std::endl;
+                 std::cout << printf("Client port is %d\n", ntohs(clientaddr4.sin_port)) << std::endl;
+              }
+          } else {
+              char str[INET6_ADDRSTRLEN];
+              getpeername(new_sd, (struct sockaddr *)&clientaddr6, &addrlen6);
+              if(inet_ntop(AF_INET6, &clientaddr6.sin6_addr, str, sizeof(str))) {
+                 std::cout << printf("Client address is %s\n", str) << std::endl;
+                 std::cout << printf("Client port is %d\n", ntohs(clientaddr6.sin6_port)) << std::endl;
+              }
           }
 
           /*****************************************************/
           /* Loop back up and accept another incoming          */
           /* connection                                        */
           /*****************************************************/
+#ifdef WIN32
+        } while (new_sd != UINT_MAX && new_sd != -1);
+#else
         } while (new_sd != -1);
+#endif
       }
 
       /*********************************************************/
@@ -435,11 +480,16 @@ void PollServer::start(int server_port)
           /*****************************************************/
           SSL_set_fd(sslmap_.at(fds[i].fd), fds[i].fd);
           rc = SSL_read(sslmap_.at(fds[i].fd), buffer, sizeof(buffer));
-          std::cout << "errno after SSL_read: " << errno << std::endl;
+
           if (rc < 0)
           {
+#ifdef WIN32
+            if (WSAGetLastError() != WSAEWOULDBLOCK)
+#else
             if (errno != EWOULDBLOCK)
+#endif
             {
+                //std::cout << "recv >>>>>>>>>>>>>>>>>>>" << WSAGetLastError() << std::endl;
               perror("  recv() failed");
               close_conn = true;
             }
@@ -473,8 +523,16 @@ void PollServer::start(int server_port)
           rc = SSL_write(sslmap_.at(fds[i].fd), send_buffer.data(), send_buffer.size());
           if (rc < 0)
           {
+#ifdef WIN32
+            if (WSAGetLastError() != WSAEWOULDBLOCK)
+#else
+            if (errno != EWOULDBLOCK)
+#endif
+                {
             perror("  send() failed");
+            std::cout << "write >>>>>>>>>>>>>>>>>>>" << WSAGetLastError() << std::endl;
             close_conn = true;
+          }
             break;
           }
 

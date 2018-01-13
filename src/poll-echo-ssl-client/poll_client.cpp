@@ -66,10 +66,11 @@ void PollClient::create_context()
     }
 }
 
-void PollClient::ConnectToServer(std::string host, int port)
+void PollClient::ConnectToServer(std::string host, int port, protocol ip_protocol)
 {
     int    bytes_recv;
-    struct sockaddr_in serv_addr;
+    struct sockaddr_in  serv_addr4;
+    struct sockaddr_in6 serv_addr6;
     struct hostent *SERVER;
     int socketfd = 0;
 
@@ -88,7 +89,31 @@ void PollClient::ConnectToServer(std::string host, int port)
     SSL_library_init();
     create_context();
 
-    socketfd = socket(AF_INET, SOCK_STREAM, 0);
+    //SERVER = gethostbyname("mailgate.filoxeni.com");
+    //SERVER = gethostbyname("andamaproxy-us-west.filoxeni.com");
+    //SERVER = gethostbyname("andamaproxy-ro-timisoara.filoxeni.com");
+    SERVER = gethostbyname(host.data());
+
+    if (ip_protocol == PollClient::IPv4){
+        socketfd = socket(AF_INET, SOCK_STREAM, 0);
+        memset((char *) &serv_addr4,0, sizeof(serv_addr4));;
+        serv_addr4.sin_family = AF_INET;
+
+        bcopy((char *)SERVER->h_addr,
+             (char *)&serv_addr4.sin_addr,
+             SERVER->h_length);
+        serv_addr4.sin_port = htons(port);
+    } else {
+        socketfd = socket(AF_INET6, SOCK_STREAM, 0);
+        memset((char *) &serv_addr6,0, sizeof(serv_addr6));;
+        serv_addr6.sin6_family = AF_INET6;
+
+        bcopy((char *)SERVER->h_addr,
+             (char *)&serv_addr6.sin6_addr,
+             SERVER->h_length);
+        serv_addr6.sin6_port = htons(port);
+    }
+
     #ifdef WIN32
     if (socketfd == INVALID_SOCKET) {
     #else
@@ -98,11 +123,6 @@ void PollClient::ConnectToServer(std::string host, int port)
         DestroySSL();
         return;
     }
-
-    //SERVER = gethostbyname("mailgate.filoxeni.com");
-    //SERVER = gethostbyname("andamaproxy-us-west.filoxeni.com");
-    //SERVER = gethostbyname("andamaproxy-ro-timisoara.filoxeni.com");
-    SERVER = gethostbyname(host.data());
 
     if (SERVER == NULL) {
         fprintf(stderr,"ERROR, no such host\n");
@@ -115,13 +135,6 @@ void PollClient::ConnectToServer(std::string host, int port)
         return;
     }
 
-    memset((char *) &serv_addr,0, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-
-
-    bcopy((char *)SERVER->h_addr,
-         (char *)&serv_addr.sin_addr,
-         SERVER->h_length);
     //serv_addr.sin_addr.s_addr=inet_addr("192.168.32.20"); // <------------- local server
 
     //SIMANTIKO: kanw disable to nagle algorithm. meiwnei to latency.
@@ -132,10 +145,13 @@ void PollClient::ConnectToServer(std::string host, int port)
                             (char *) &flag,  /* the cast is historical cruft */
                             sizeof(int));    /* length of option value */
 
-    serv_addr.sin_port = htons(port);
-
      //connect to server
-    int conres = ::connect(socketfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+    int conres = -1;
+    if (ip_protocol == PollClient::IPv4){
+        conres = ::connect(socketfd, (struct sockaddr *) &serv_addr4, sizeof(serv_addr4));
+    } else {
+        conres = ::connect(socketfd, (struct sockaddr *) &serv_addr6, sizeof(serv_addr6));
+    }
 
     if (conres < 0)
     {

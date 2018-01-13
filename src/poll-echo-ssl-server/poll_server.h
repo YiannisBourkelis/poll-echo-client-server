@@ -17,10 +17,13 @@ public:
     //constructors
     PollServer();
 
+    //enums
+    enum protocol {IPv4, IPv4_IPv6};
+
     //methods
 
     //starts the poll server
-    void start(int server_port);
+    void start(int server_port, protocol ip_protocol);
 
     //ssl specific init and cleanup
     void InitializeSSL();
@@ -28,6 +31,7 @@ public:
     void create_context();
     void configure_context();
 
+    void displayLastError(std::string description);
 private:
     //variables
     SSL_CTX *sslctx_;

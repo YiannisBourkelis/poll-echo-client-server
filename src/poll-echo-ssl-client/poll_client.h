@@ -15,7 +15,10 @@ class PollClient
 {
 public:
     PollClient();
-    void ConnectToServer(std::string host, int port);
+
+    enum protocol {IPv4, IPv6};
+
+    void ConnectToServer(std::string host, int port, protocol ip_protocol);
     void InitializeSSL();
     void DestroySSL();
     void ShutdownSSL();
