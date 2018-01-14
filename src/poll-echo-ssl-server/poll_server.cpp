@@ -287,7 +287,7 @@ void PollServer::start(int server_port, protocol ip_protocol)
       /* and closes the socket                                 */
       /*********************************************************/
 #ifdef WIN32
-      if(fds[i].revents != POLLRDNORM)
+      if(fds[i].revents != (fds[i].revents & POLLRDNORM) )
 #else
       if(fds[i].revents != POLLIN)
 #endif
@@ -383,6 +383,7 @@ void PollServer::start(int server_port, protocol ip_protocol)
           #else
           tmpfd_new.events = POLLIN;
           #endif
+          tmpfd_new.revents = 0;
           fds.insert(fds.end(), std::move(tmpfd_new));
 
           /*****************************************************************/
