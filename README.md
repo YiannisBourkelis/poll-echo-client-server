@@ -7,3 +7,5 @@ The server echoes back whatever it receives using a secure TLS channel. It suppo
 
 Run the poll-echo-ssl-server and connect to it using the command: openssl s_client -connect localhost:12348
 
+To generate your self-signed public certificate and private key run the command: openssl req -newkey rsa:2048 -nodes -keyout key.pem -x509 -days 365 -out certificate.pem
+
