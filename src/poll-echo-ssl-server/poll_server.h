@@ -32,6 +32,19 @@ public:
     void configure_context();
 
     void displayLastError(std::string description);
+
+    #ifdef WIN32
+    void disableNagleAlgorithm(SOCKET socket);
+    #else
+    void disableNagleAlgorithm(int socket);
+    #endif
+
+    #ifdef WIN32
+    void setSocketNonBlocking(SOCKET socket);
+    #else
+    void setSocketNonBlocking(int socket);
+    #endif
+
 private:
     //variables
     SSL_CTX *sslctx_;

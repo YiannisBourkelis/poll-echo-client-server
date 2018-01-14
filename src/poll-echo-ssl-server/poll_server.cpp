@@ -85,13 +85,59 @@ void PollServer::configure_context()
 }
 
 void PollServer::displayLastError(std::string description){
-    int lastErrorNo = 0;
 #ifdef WIN32
-            lastErrorNo = WSAGetLastError();
+        std::cout <<  description << " - Last error number: " << WSAGetLastError() << std::endl;
 #else
-            lastErrorNo = errno;
+        perror(description.data());
 #endif
-    std::cout << description << " - Last error number: " << lastErrorNo << std::endl;
+}
+
+#ifdef WIN32
+void PollServer::disableNagleAlgorithm(SOCKET socket){
+#else
+void PollServer::disableNagleAlgorithm(int socket){
+#endif
+    /*************************************************************/
+    /* SIMANTIKO: kanw disable to nagle algorithm. meiwnei to latency. */
+    /*************************************************************/
+   int flag = 1;
+   int setsockopt_nagle_ret = 0;
+   setsockopt_nagle_ret = setsockopt(socket,                    /* socket affected */
+                           IPPROTO_TCP,     /* set option at TCP level */
+                           TCP_NODELAY,     /* name of option */
+                           (char *) &flag,  /* the cast is historical cruft */
+                           sizeof(int));    /* length of option value */
+   if (setsockopt_nagle_ret < 0){
+       displayLastError("setsockopt to disable nagle algorithm failed for listening socket");
+   }
+}
+
+#ifdef WIN32
+void PollServer::setSocketNonBlocking(SOCKET socket){
+#else
+void PollServer::setSocketNonBlocking(int socket){
+#endif
+    /*************************************************************/
+    /* Set socket to be nonblocking. All of the sockets for    */
+    /* the incoming connections will also be nonblocking since  */
+    /* they will inherit that state from the listening socket.   */
+    /*************************************************************/
+    int rc, on = 1;
+    #ifdef WIN32
+    rc = ioctlsocket(socket, FIONBIO, (u_long*)&on);
+    #else
+    rc = ioctl(socket, FIONBIO, (char *)&on);
+    #endif
+    if (rc < 0)
+    {
+      displayLastError("ioctl() failed for listen_sd");
+      #ifdef WIN32
+      closesocket(socket);
+      #else
+      close(socket);
+      #endif
+      exit(-1);
+    }
 }
 
 void PollServer::start(int server_port, protocol ip_protocol)
@@ -121,6 +167,12 @@ void PollServer::start(int server_port, protocol ip_protocol)
     struct              pollfd fds[200];
     int                 listen_sd = -1, new_sd = -1;
 #endif
+
+#ifndef WIN32
+ //gia na mi prokaleitai crash otan paw na grapsw se socket pou exei kleisei
+ //http://stackoverflow.com/questions/108183/how-to-prevent-sigpipes-or-handle-them-properly
+ signal(SIGPIPE, SIG_IGN);
+ #endif
 
   InitializeSSL();
   create_context();
@@ -157,26 +209,8 @@ void PollServer::start(int server_port, protocol ip_protocol)
     exit(-1);
   }
 
-  /*************************************************************/
-  /* Set socket to be nonblocking. All of the sockets for    */
-  /* the incoming connections will also be nonblocking since  */
-  /* they will inherit that state from the listening socket.   */
-  /*************************************************************/
-  #ifdef WIN32
-  rc = ioctlsocket(listen_sd, FIONBIO, (u_long*)&on);
-  #else
-  rc = ioctl(listen_sd, FIONBIO, (char *)&on);
-  #endif
-  if (rc < 0)
-  {
-    displayLastError("ioctl() failed for listen_sd");
-    #ifdef WIN32
-    closesocket(listen_sd);
-    #else
-    close(listen_sd);
-    #endif
-    exit(-1);
-  }
+  /* Set socket to be nonblocking.                             */
+  setSocketNonBlocking(listen_sd);
 
   /*************************************************************/
   /* Bind the socket                                           */
@@ -237,19 +271,8 @@ void PollServer::start(int server_port, protocol ip_protocol)
   fds[0].events = POLLIN;
   #endif
 
-   /*************************************************************/
    /* SIMANTIKO: kanw disable to nagle algorithm. meiwnei to latency. */
-   /*************************************************************/
-  int flag = 1;
-  int setsockopt_nagle_ret = 0;
-  setsockopt_nagle_ret = setsockopt(listen_sd,                    /* socket affected */
-                          IPPROTO_TCP,     /* set option at TCP level */
-                          TCP_NODELAY,     /* name of option */
-                          (char *) &flag,  /* the cast is historical cruft */
-                          sizeof(int));    /* length of option value */
-  if (setsockopt_nagle_ret < 0){
-      displayLastError("setsockopt to disable nagle algorithm failed for listening socket");
-  }
+   disableNagleAlgorithm(listen_sd);
 
   /*************************************************************/
   /* Loop waiting for incoming connects or for incoming data   */
@@ -358,40 +381,11 @@ void PollServer::start(int server_port, protocol ip_protocol)
             break;
           }
 
-          /*************************************************************/
           /* SIMANTIKO: kanw disable to nagle algorithm. meiwnei to latency. */
-          /*************************************************************/
-         int flag = 1;
-         int setsockopt_nagle_ret = 0;
-         setsockopt_nagle_ret = setsockopt(new_sd,/* socket affected */
-                                 IPPROTO_TCP,     /* set option at TCP level */
-                                 TCP_NODELAY,     /* name of option */
-                                 (char *) &flag,  /* the cast is historical cruft */
-                                 sizeof(int));    /* length of option value */
-         if (setsockopt_nagle_ret < 0){
-             displayLastError("setsockopt to disable nagle algorithm failed for new_sd socket");
-         }
+          disableNagleAlgorithm(new_sd);
 
-         /*************************************************************/
-         /* Set socket to be nonblocking. All of the sockets for    */
-         /* the incoming connections will also be nonblocking since  */
-         /* they will inherit that state from the listening socket.   */
-         /*************************************************************/
-         #ifdef WIN32
-         rc = ioctlsocket(new_sd, FIONBIO, (u_long*)&on);
-         #else
-         rc = ioctl(new_sd, FIONBIO, (char *)&on);
-         #endif
-         if (rc < 0)
-         {
-           displayLastError("ioctl() failed for new_sd");
-           #ifdef WIN32
-           closesocket(new_sd);
-           #else
-           close(new_sd);
-           #endif
-           break;
-         }
+         /* Set socket to be nonblocking.    */
+        setSocketNonBlocking(new_sd);
 
           sslmap_.insert(std::pair<int,SSL*>(new_sd, SSL_new(sslctx_)));
           SSL_set_fd(sslmap_.at(new_sd), new_sd);
@@ -444,6 +438,10 @@ void PollServer::start(int server_port, protocol ip_protocol)
               }
           }
 
+          // apostoli mynimatos kalosorismatos
+          std::string greeting = "Welcome to the SSL Poll Echo Server by Yiannis Bourkelis\n";
+          int rc = SSL_write(sslmap_.at(new_sd), greeting.data(), greeting.size());
+
           /*****************************************************/
           /* Loop back up and accept another incoming          */
           /* connection                                        */
@@ -488,8 +486,7 @@ void PollServer::start(int server_port, protocol ip_protocol)
             if (errno != EWOULDBLOCK)
 #endif
             {
-                //std::cout << "recv >>>>>>>>>>>>>>>>>>>" << WSAGetLastError() << std::endl;
-              perror("  recv() failed");
+              displayLastError("recv() failed");
               close_conn = true;
             }
             break;

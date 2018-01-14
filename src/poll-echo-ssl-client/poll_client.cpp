@@ -85,6 +85,12 @@ void PollClient::ConnectToServer(std::string host, int port, protocol ip_protoco
     }
     #endif
 
+    #ifndef WIN32
+    //gia na mi prokaleitai crash otan paw na grapsw se socket pou exei kleisei
+    //http://stackoverflow.com/questions/108183/how-to-prevent-sigpipes-or-handle-them-properly
+    signal(SIGPIPE, SIG_IGN);
+    #endif
+
     InitializeSSL();
     SSL_library_init();
     create_context();
@@ -199,7 +205,30 @@ void PollClient::ConnectToServer(std::string host, int port, protocol ip_protoco
         std::vector<char> buff(1024);
         std::string input_str = "weddwedwed";
 
-        SSL_write(cssl, input_str.data(), input_str.size());
+        int bytes_written = SSL_write(cssl, input_str.data(), input_str.size());
+        if (bytes_written == 0) {
+            perror("SSL_write - bytes_written = 0");
+            #ifdef WIN32
+            closesocket(socketfd);
+            #else
+            close(socketfd);
+            #endif
+            ShutdownSSL();
+            DestroySSL();
+            return;
+        }
+        if (bytes_written == -1) {
+            perror("SSL_write - bytes_written = -1");
+            #ifdef WIN32
+            closesocket(socketfd);
+            #else
+            close(socketfd);
+            #endif
+            ShutdownSSL();
+            DestroySSL();
+            return;
+        }
+
         bytes_recv = SSL_read(cssl, buff.data(), 1024);
             if (bytes_recv == 0){
                 perror("SSL_read - bytes_recv = 0");

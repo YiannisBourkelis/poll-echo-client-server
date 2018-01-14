@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
     while (true) {
         PollClient poll_c;
         poll_c.ConnectToServer("localhost", 12348, PollClient::IPv4);
-        //poll_c.ConnectToServer("mailgate.filoxeni.com", 12346, PollClient::IPv4);
+        //poll_c.ConnectToServer("mailgate.filoxeni.com", 12348, PollClient::IPv6);
         QThread::msleep(1000);
     }
 
