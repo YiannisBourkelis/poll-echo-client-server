@@ -12,33 +12,6 @@
 // https://wiki.openssl.org/index.php/Simple_TLS_Server
 
 #include "poll_server.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <iostream> //std::cout, memset
-#include <vector>
-#include <string.h> //memset
-#include <QThread> //sleep
-
-#ifndef WIN32
-#include <sys/ioctl.h>
-#include <sys/poll.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <netinet/in.h>
-#include <arpa/inet.h> //inet_ntop
-#include <unistd.h> //close
-#include <netinet/tcp.h> //gia to TCP_NODELAY
-#else
-//#define NOMINMAX
-#include <stdio.h>
-#include "winsock2.h"
-#include <ws2tcpip.h>
-#define bzero(b,len) (memset((b), '\0', (len)), (void) 0)
-#define bcopy(b1,b2,len) (memmove((b2), (b1), (len)), (void) 0)
-#define in_addr_t uint32_t
-#pragma comment(lib, "Ws2_32.lib")
-#endif
 
 PollServer::PollServer()
 {
