@@ -115,18 +115,17 @@ void PollServer::setSocketNonBlocking(int socket){
 
 void PollServer::start(int server_port, protocol ip_protocol)
 {
-  int                   len, rc, on = 1;
-  bool                  end_server = false, compress_array = false;
+  int                   len, rc, i, on = 1;
+  bool                  end_server = false;
   int                   close_conn;
   char                  buffer[80];
   struct sockaddr_in    addr4, clientaddr4;
   struct sockaddr_in6   addr6, clientaddr6;
   socklen_t             addrlen4 = sizeof(clientaddr4);
   socklen_t             addrlen6 = sizeof(clientaddr6);
-  int                   nfds = 1, current_size = 0, i, j;
 
 #ifdef WIN32
-    WSAPOLLFD           fds[200];
+    std::vector<WSAPOLLFD> fds;
     SOCKET              listen_sd = -1, new_sd = -1;
     // Initialize Winsock
     int iResult;
@@ -137,7 +136,7 @@ void PollServer::start(int server_port, protocol ip_protocol)
         return;
     }
 #else
-    struct              pollfd fds[200];
+    std::vector<pollfd> fds;
     int                 listen_sd = -1, new_sd = -1;
 #endif
 
@@ -217,7 +216,7 @@ void PollServer::start(int server_port, protocol ip_protocol)
   /* Set the listen back log                                   */
   /*************************************************************/
   std::cout << "Listening for connections on port:" << server_port << std::endl;
-  rc = listen(listen_sd, 35);
+  rc = listen(listen_sd, SOMAXCONN);
   if (rc < 0)
   {
     perror("listen() failed");
@@ -230,19 +229,16 @@ void PollServer::start(int server_port, protocol ip_protocol)
   }
 
   /*************************************************************/
-  /* Initialize the pollfd structure                           */
-  /*************************************************************/
-  memset(fds, 0 , sizeof(fds));
-
-  /*************************************************************/
   /* Set up the initial listening socket                        */
   /*************************************************************/
-  fds[0].fd     = listen_sd;
+  pollfd tmp_listen_fds;
+  tmp_listen_fds.fd     = listen_sd;
   #ifdef WIN32
-  fds[0].events = POLLRDNORM;
+  tmp_listen_fds.events = POLLRDNORM;
   #else
-  fds[0].events = POLLIN;
+  tmp_listen_fds.events = POLLIN;
   #endif
+  fds.insert(fds.end(), std::move(tmp_listen_fds));
 
    /* SIMANTIKO: kanw disable to nagle algorithm. meiwnei to latency. */
    disableNagleAlgorithm(listen_sd);
@@ -258,9 +254,9 @@ void PollServer::start(int server_port, protocol ip_protocol)
     /***********************************************************/
     std::cout << "Waiting on poll()...\n" << std::endl;
     #ifdef WIN32
-    rc = WSAPoll(fds, nfds, -1);
+    rc = WSAPoll(fds.data(), fds.size(), -1);
     #else
-    rc = poll(fds, nfds, -1);
+    rc = poll(fds.data(), fds.size(), -1);
     #endif
 
     /***********************************************************/
@@ -276,8 +272,7 @@ void PollServer::start(int server_port, protocol ip_protocol)
     /* One or more descriptors are readable.  Need to          */
     /* determine which ones they are.                          */
     /***********************************************************/
-    current_size = nfds;
-    for (i = 0; i < current_size; i++)
+    for (i = 0; i < fds.size(); i++)
     {
       /*********************************************************/
       /* Loop through to find the descriptors that returned    */
@@ -308,8 +303,7 @@ void PollServer::start(int server_port, protocol ip_protocol)
           SSL_shutdown(sslmap_.at(fds[i].fd));
           SSL_free(sslmap_.at(fds[i].fd));
           sslmap_.erase(sslmap_.find(fds[i].fd));
-          fds[i].fd = -1;
-          compress_array = true;
+          fds.erase(fds.begin() + i);
 
         break;
       }
@@ -382,13 +376,14 @@ void PollServer::start(int server_port, protocol ip_protocol)
           /* pollfd structure                                  */
           /*****************************************************/
           std::cout << printf("  New incoming connection - %d\n", new_sd) << std::endl;
-          fds[nfds].fd = new_sd;
+          pollfd tmpfd_new;
+          tmpfd_new.fd = new_sd;
           #ifdef WIN32
-          fds[nfds].events = POLLRDNORM;
+          tmpfd_new.events = POLLRDNORM;
           #else
-          fds[nfds].events = POLLIN;
+          tmpfd_new.events = POLLIN;
           #endif
-          nfds++;
+          fds.insert(fds.end(), std::move(tmpfd_new));
 
           /*****************************************************************/
           /* Display the client address.  Note that if the client is       */
@@ -524,43 +519,19 @@ void PollServer::start(int server_port, protocol ip_protocol)
           SSL_shutdown(sslmap_.at(fds[i].fd));
           SSL_free(sslmap_.at(fds[i].fd));
           sslmap_.erase(sslmap_.find(fds[i].fd));
-          fds[i].fd = -1;
-          compress_array = true;
+          fds.erase(fds.begin() + i);
         }
 
 
       }  /* End of existing connection is readable             */
     } /* End of for loop through pollable descriptors              */
 
-    /***********************************************************/
-    /* If the compress_array flag was turned on, we need       */
-    /* to squeeze together the array and decrement the number  */
-    /* of file descriptors. We do not need to move back the    */
-    /* events and revents fields because the events will always*/
-    /* be POLLIN in this case, and revents is output.          */
-    /***********************************************************/
-    if (compress_array)
-    {
-      compress_array = false;
-      for (i = 0; i < nfds; i++)
-      {
-        if (fds[i].fd == -1)
-        {
-          for(j = i; j < nfds; j++)
-          {
-            fds[j].fd = fds[j+1].fd;
-          }
-          nfds--;
-        }
-      }
-    }
-
   } while (end_server == false); /* End of serving running.    */
 
   /*************************************************************/
   /* Clean up all of the sockets that are open                  */
   /*************************************************************/
-  for (i = 0; i < nfds; i++)
+  for (i = 0; i < fds.size(); i++)
   {
     if(fds[i].fd >= 0)
         #ifdef WIN32
