@@ -115,7 +115,7 @@ void PollServer::setSocketNonBlocking(int socket){
 
 void PollServer::start(int server_port, protocol ip_protocol)
 {
-  int                   len, rc, i, on = 1;
+  int                   len, rc, on = 1;
   bool                  end_server = false;
   int                   close_conn;
   char                  buffer[80];
@@ -272,14 +272,14 @@ void PollServer::start(int server_port, protocol ip_protocol)
     /* One or more descriptors are readable.  Need to          */
     /* determine which ones they are.                          */
     /***********************************************************/
-    for (i = 0; i < fds.size(); i++)
+    for (std::vector<pollfd>::iterator fds_it = fds.end() - 1; fds_it >= fds.begin(); fds_it--)
     {
       /*********************************************************/
       /* Loop through to find the descriptors that returned    */
       /* POLLIN and determine whether it's the listening       */
       /* or the active connection.                             */
       /*********************************************************/
-      if(fds[i].revents == 0)
+      if(fds_it->revents == 0)
         continue;
 
       /*********************************************************/
@@ -287,28 +287,28 @@ void PollServer::start(int server_port, protocol ip_protocol)
       /* and closes the socket                                 */
       /*********************************************************/
 #ifdef WIN32
-      if(fds[i].revents != (fds[i].revents & POLLRDNORM) )
+      if(fds_it->revents != (fds_it->revents & POLLRDNORM) )
 #else
-      if(fds[i].revents != POLLIN)
+      if(fds_it->revents != POLLIN)
 #endif
       {
-        std::cout << printf("  Error! revents = %d\n", fds[i].revents) << std::endl;
+        std::cout << printf("  Error! revents = %d\n", fds_it->revents) << std::endl;
         perror("  Error on readable descriptor");
 
           #ifdef WIN32
-          closesocket(fds[i].fd);
+          closesocket(fds_it->fd);
           #else
-          close(fds[i].fd);
+          close(fds_it->fd);
           #endif
-          SSL_shutdown(sslmap_.at(fds[i].fd));
-          SSL_free(sslmap_.at(fds[i].fd));
-          sslmap_.erase(sslmap_.find(fds[i].fd));
-          fds.erase(fds.begin() + i);
+          SSL_shutdown(sslmap_.at(fds_it->fd));
+          SSL_free(sslmap_.at(fds_it->fd));
+          sslmap_.erase(sslmap_.find(fds_it->fd));
+          fds.erase(fds_it);
 
         break;
       }
 
-      if (fds[i].fd == listen_sd)
+      if (fds_it->fd == listen_sd)
       {
         /*******************************************************/
         /* Listening descriptor is readable.                   */
@@ -429,7 +429,7 @@ void PollServer::start(int server_port, protocol ip_protocol)
 
       else
       {
-        std::cout << printf("  Descriptor %d is readable\n", fds[i].fd) << std::endl;
+        std::cout << printf("  Descriptor %d is readable\n", fds_it->fd) << std::endl;
         close_conn = false;
         /*******************************************************/
         /* Receive all incoming data on this socket            */
@@ -444,8 +444,8 @@ void PollServer::start(int server_port, protocol ip_protocol)
           /* failure occurs, we will close the                 */
           /* connection.                                       */
           /*****************************************************/
-          SSL_set_fd(sslmap_.at(fds[i].fd), fds[i].fd);
-          rc = SSL_read(sslmap_.at(fds[i].fd), buffer, sizeof(buffer));
+          SSL_set_fd(sslmap_.at(fds_it->fd), fds_it->fd);
+          rc = SSL_read(sslmap_.at(fds_it->fd), buffer, sizeof(buffer));
 
           if (rc < 0)
           {
@@ -485,7 +485,7 @@ void PollServer::start(int server_port, protocol ip_protocol)
           std::vector<char> send_buffer (echoStr.begin(), echoStr.end());
           std::vector<char> vbuffer(buffer, buffer+len);
           send_buffer.insert(send_buffer.end(),vbuffer.begin(), vbuffer.end());
-          rc = SSL_write(sslmap_.at(fds[i].fd), send_buffer.data(), send_buffer.size());
+          rc = SSL_write(sslmap_.at(fds_it->fd), send_buffer.data(), send_buffer.size());
           if (rc < 0)
           {
 #ifdef WIN32
@@ -513,14 +513,14 @@ void PollServer::start(int server_port, protocol ip_protocol)
         if (close_conn)
         {
           #ifdef WIN32
-          closesocket(fds[i].fd);
+          closesocket(fds_it->fd);
           #else
-          close(fds[i].fd);
+          close(fds_it->fd);
           #endif
-          SSL_shutdown(sslmap_.at(fds[i].fd));
-          SSL_free(sslmap_.at(fds[i].fd));
-          sslmap_.erase(sslmap_.find(fds[i].fd));
-          fds.erase(fds.begin() + i);
+          SSL_shutdown(sslmap_.at(fds_it->fd));
+          SSL_free(sslmap_.at(fds_it->fd));
+          sslmap_.erase(sslmap_.find(fds_it->fd));
+          fds.erase(fds_it);
         }
 
 
@@ -532,7 +532,7 @@ void PollServer::start(int server_port, protocol ip_protocol)
   /*************************************************************/
   /* Clean up all of the sockets that are open                  */
   /*************************************************************/
-  for (i = 0; i < fds.size(); i++)
+  for (size_t i = 0; i < fds.size(); i++)
   {
     if(fds[i].fd >= 0)
         #ifdef WIN32
